@@ -2,7 +2,7 @@
 #include <pthread.h>
 #include <cstdio>
 
-#define MT_LEVEL 5
+#define MT_LEVEL 2
 
 struct ThreadContext {
 	int threadID;

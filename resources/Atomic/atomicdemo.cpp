@@ -5,7 +5,7 @@
 #define MT_LEVEL 5
 
 struct ThreadContext {
-    std::atomic<int>* atomic_counter;
+        std::atomic<int>* atomic_counter;
     int* bad_counter;
 };
 
