@@ -81,6 +81,8 @@ void reduce(ThreadContext *tc) {
             tc->client->reduce(keyVec, tc);
         }
         else{
+            printf("ID: %d\n", tc->threadID);
+
             break;
         }
     }
