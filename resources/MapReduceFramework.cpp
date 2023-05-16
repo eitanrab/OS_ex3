@@ -25,7 +25,7 @@ struct ThreadContext {
     Barrier* barrier;
     InputVec inputVec;
     IntermediateVec ** interVecs;
-    std::vector<IntermediateVec*> * interVecs1;
+    std::vector<IntermediateVec*> ** interVecs1;
     OutputVec* outputVec;
     const MapReduceClient* client;
     int multiThreadLevel;
@@ -74,10 +74,11 @@ void* mapSortReduce(void* arg){
 void reduce(ThreadContext *tc) {
     while(true) {
         uint64_t old_value = (*(tc->atomic_counter))++;
-        if (old_value < tc->interVecs1->size()) {
-            auto  keyVec= (*(tc->interVecs1))[old_value];
+        int val= old_value<<33>>33;
+        printf("%d\n", (*(tc->interVecs1))->size());
+        if (val < (*(tc->interVecs1))->size()-1) { //todo chek that size is actualy -1
+            auto  keyVec= (**(tc->interVecs1))[val];
             tc->client->reduce(keyVec, tc);
-            (*(tc->atomic_counter)) += 1 << 31;
         }
         else{
             break;
@@ -157,7 +158,7 @@ shuffle(IntermediateVec **intermediateVecs, ThreadContext *tc) {
         }
         tempVecs->push_back(temp);
     }
-    tc->interVecs1=tempVecs;
+    (*(tc->interVecs1))=tempVecs;
     delete maxKeys;
 
 }
@@ -192,11 +193,12 @@ startMapReduceJob(const MapReduceClient &client, const InputVec &inputVec, Outpu
     auto barrier = new (std::nothrow) Barrier(multiThreadLevel);
     auto atomic_counter = new (std::nothrow) std::atomic<uint64_t>(0);
     auto intermediateVecs = new (std::nothrow) IntermediateVec*[multiThreadLevel];
+    auto interVecs1 = new (std::nothrow) std::vector<IntermediateVec*> *;
     for (int i=0; i < multiThreadLevel; i++) {
         intermediateVecs[i] = new (std::nothrow) IntermediateVec;
     }
     for (int i = 0; i < multiThreadLevel; ++i) {
-        contexts[i] = new (std::nothrow) ThreadContext{i, atomic_counter, barrier, inputVec, intermediateVecs, nullptr,
+        contexts[i] = new (std::nothrow) ThreadContext{i, atomic_counter, barrier, inputVec, intermediateVecs, interVecs1,
                        &outputVec, &client, multiThreadLevel};
     }
 
@@ -249,17 +251,18 @@ void getJobState(JobHandle job, JobState* state) {
 
 void closeJobHandle(JobHandle job){
     waitForJob(job);
-    auto jc = (JobContext*) job;
-    for (int i=0; i<jc->multiThreadLevel; i++) {
-        delete jc->contexts[i]->interVecs[i];
-    }
-    delete (*(jc->contexts))[0].atomic_counter;
-    delete[] (*(jc->contexts))[0].interVecs;
-    for (int i=0; i<jc->multiThreadLevel; i++) {
-        delete jc->contexts[i];
-    }
-    delete jc->contexts;
-    delete[] jc->threads;
-    delete jc->barrier;
-    delete jc;
+//    auto jc = (JobContext*) job;
+//    for (int i=0; i<jc->multiThreadLevel; i++) {
+//        delete jc->contexts[i]->interVecs[i];
+//    }
+//    delete jc->contexts[0]->interVecs1;
+//    delete (*(jc->contexts))[0].atomic_counter;
+//    delete[] (*(jc->contexts))[0].interVecs;
+//    for (int i=0; i<jc->multiThreadLevel; i++) {
+//        delete jc->contexts[i];
+//    }
+//    delete jc->contexts;
+//    delete[] jc->threads;
+//    delete jc->barrier;
+//    delete jc;
 }
