@@ -87,6 +87,7 @@ int main(int argc, char** argv)
         if (last_state.stage != state.stage || last_state.percentage != state.percentage){
             printf("stage %d, %f%% \n", 
 			state.stage, state.percentage);
+          fflush (stdout);
         }
 		usleep(100000);
         last_state = state;

@@ -7,6 +7,7 @@ typedef void* JobHandle;
 
 enum stage_t {UNDEFINED_STAGE=0, MAP_STAGE=1, SHUFFLE_STAGE=2, REDUCE_STAGE=3};
 
+static const char *const MEMORY_ALLOCATION_ERR_MSSG = "Memory allocation failed.";
 typedef struct {
 	stage_t stage;
 	float percentage;
