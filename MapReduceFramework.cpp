@@ -12,7 +12,7 @@
 #include <ostream>
 #include <iostream>
 
-#include "Barrier.h"
+#include "Barrier/Barrier.h"
 #include "MapReduceFramework.h"
 
 
@@ -66,7 +66,7 @@ void *mapSortReduce (void *arg)
 
   tc -> barrier -> barrier ();
 
-  shuffel (tc);
+  shuffle (tc);
 
   //reduce
   reduce (tc);
@@ -381,7 +381,7 @@ void getJobState (JobHandle job, JobState *state)
     state -> percentage = 0;
     return;
   }
-  int denom;
+  unsigned long denom;
   if (state -> stage == MAP_STAGE)
   {
     denom = (*(jc -> contexts))[0] . inputVec . size ();
@@ -395,7 +395,7 @@ void getJobState (JobHandle job, JobState *state)
 //      denom += (*(tc . interVecs + i)) -> size ();
 //    }
   }
-  else if (state -> stage == REDUCE_STAGE)
+  else //if (state -> stage == REDUCE_STAGE)
   {
     denom = (*(tc . interVecs1)) -> size ();
   }
