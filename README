@@ -1,0 +1,15 @@
+eitan.rab, davidkalech
+Eitan Rabinovich 318894763, David Kalech 206555070
+EX: 2
+
+FILES:
+mapReduceFrameWork.cpp -- The provided code implements a MapReduce framework.
+                          It allows users to run MapReduce jobs using multiple
+                          threads. The code handles the mapping, sorting,
+                          shuffling, and reducing steps of the MapReduce
+                          process, while ensuring thread synchronization and
+                          data integrity.
+
+REMARKS:
+
+ANSWERS:
