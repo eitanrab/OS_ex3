@@ -2,21 +2,15 @@
 // Created by eitan.rab on 5/16/23.
 //
 
-#include <utility>
 #include <vector>
 #include <pthread.h>
 #include <cstdio>
-#include <atomic>
 #include <algorithm>
 #include <queue>
-#include <ostream>
 #include <iostream>
 
 #include "Barrier/Barrier.h"
 #include "MapReduceFramework.h"
-
-
-//todo prnt error mesage whenever system call doesn't work
 
 #define SYS_ERROR "system error: "
 
@@ -60,7 +54,6 @@ void *mapSortReduce (void *arg)
   auto tc = (ThreadContext *) arg;
 
   map (tc);
-//    auto  interVec= new (std::nothrow) (*(tc->interVecs))[tc->threadID];
   auto interVec = *(tc -> interVecs + tc -> threadID);
   std::sort (interVec -> begin (), interVec -> end (), compare);
 
@@ -86,7 +79,6 @@ void shuffle (ThreadContext *tc)
 
     (*(tc -> atomic_counter)) =
         (((uint64_t) 1) << 63) + (((uint64_t) 1) << 62);
-    //todo make sure that we can 0 the counter here before passing the barrier
     tc -> barrier -> barrier ();
 
   }
@@ -97,18 +89,14 @@ void reduce (ThreadContext *tc)
   while (true)
   {
     uint64_t old_value = (*(tc -> atomic_counter))++;
-
-    int val = old_value << 33 >> 33;
-//    printf ("%zu\n", val);
+    long val = old_value << 33 >> 33;
     if (val < (*(tc -> interVecs1)) -> size ())
-    { //todo chek that size is actualy -1
+    {
       auto keyVec = (**(tc -> interVecs1))[val];
       tc -> client -> reduce (keyVec, tc);
-
     }
     else
     {
-//      printf ("ID: %d\n", tc -> threadID);
       break;
     }
   }
@@ -117,7 +105,7 @@ void lockMutex (ThreadContext *tc)
 {
   if (pthread_mutex_lock (tc -> mutex) != 0)
   {
-    std::cerr << SYS_ERROR << "error in pthread_mutex_lock" << std::endl;
+    std::cout << SYS_ERROR << "error in pthread_mutex_lock" << std::endl;
     exit (1);
   }
 }
@@ -125,7 +113,7 @@ void unlockMutex (ThreadContext *tc)
 {
   if (pthread_mutex_unlock (tc -> mutex) != 0)
   {
-    std::cerr << SYS_ERROR << "error on pthread_mutex_unlock" << std::endl;
+    std::cout << SYS_ERROR << "error on pthread_mutex_unlock" << std::endl;
     exit (1);
   }
 }
@@ -167,16 +155,16 @@ void
 shuffle (IntermediateVec **intermediateVecs, ThreadContext *tc)
 {
   IntermediateVec **interVecs = intermediateVecs;
-  auto tempVecs = new (std::nothrow) std::vector<IntermediateVec *>; //todo makee sure this doesn't need alloction
+  auto tempVecs = new (std::nothrow) std::vector<IntermediateVec *>;
   if (!tempVecs)
   {
-    std::cerr << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
+    std::cout << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
     exit (1);
   }
-  auto maxKeys = new IntermediateVec (tc -> multiThreadLevel);
+  auto maxKeys = new (std::nothrow) IntermediateVec (tc -> multiThreadLevel);
   if (!maxKeys)
   {
-    std::cerr << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
+    std::cout << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
     exit (1);
   }
   for (int i = 0; i < tc -> multiThreadLevel; i++)
@@ -206,11 +194,10 @@ shuffle (IntermediateVec **intermediateVecs, ThreadContext *tc)
         maxel = (*(p . first)) < (*(maxel . first)) ? maxel : p;
       }
     }
-//        auto maxIter = std::max_element(maxKeys->begin(), maxKeys->end());
     auto temp = new (std::nothrow) IntermediateVec;
     if (!temp)
     {
-      std::cerr << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
+      std::cout << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
       exit (1);
     }
     flag_working = false;
@@ -257,14 +244,17 @@ struct JobContext
   Barrier *barrier;
   bool waiting = false;
   int multiThreadLevel;
+  pthread_mutex_t *mutex_wait_for_job;
 
   JobContext (pthread_t *threadVec,
               ThreadContext **contextVec,
-              Barrier *barrierObj, int multithreadLevel)
+              Barrier *barrierObj, int multithreadLevel,
+              pthread_mutex_t *mutex)
       : threads (threadVec),
         contexts (contextVec),
         barrier (barrierObj),
-        multiThreadLevel (multithreadLevel)
+        multiThreadLevel (multithreadLevel),
+        mutex_wait_for_job (mutex)
   {}
 };
 
@@ -280,11 +270,12 @@ startMapReduceJob (const MapReduceClient &client, const InputVec &inputVec, Outp
   auto intermediateVecs = new (std::nothrow) IntermediateVec *[multiThreadLevel];
   auto interVecs1 = new (std::nothrow) std::vector<IntermediateVec *> *;
   auto mutex = new (std::nothrow)pthread_mutex_t (PTHREAD_MUTEX_INITIALIZER);
+  auto mutex_wait_for_job = new (std::nothrow)pthread_mutex_t (PTHREAD_MUTEX_INITIALIZER);
   if (!threads || !contexts || !barrier || !atomic_counter
       || !atomic_inter_counter
       || !atomic_out_counter || !intermediateVecs || !interVecs1 || !mutex)
   {
-    std::cerr << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
+    std::cout << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
     exit (1);
   }
   for (int i = 0; i < multiThreadLevel; i++)
@@ -292,7 +283,7 @@ startMapReduceJob (const MapReduceClient &client, const InputVec &inputVec, Outp
     intermediateVecs[i] = new (std::nothrow) IntermediateVec;
     if (!intermediateVecs[i])
     {
-      std::cerr << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
+      std::cout << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
       exit (1);
     }
   }
@@ -307,7 +298,7 @@ startMapReduceJob (const MapReduceClient &client, const InputVec &inputVec, Outp
                                                    multiThreadLevel, mutex};
     if (!contexts[i])
     {
-      std::cerr << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
+      std::cout << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
       exit (1);
     }
   }
@@ -323,10 +314,12 @@ startMapReduceJob (const MapReduceClient &client, const InputVec &inputVec, Outp
   }
 
   // Initialize the members of JobContext as needed
-  JobContext *jobContext = new (std::nothrow) JobContext (threads, contexts, barrier, multiThreadLevel);
+  JobContext *jobContext = new (std::nothrow) JobContext (threads, contexts, barrier,
+                                                          multiThreadLevel,
+                                                          mutex_wait_for_job);
   if (!jobContext)
   {
-    std::cerr << "system error: out of memory" << std::endl;
+    std::cout << "system error: out of memory" << std::endl;
     exit (1);
   }
 
@@ -364,7 +357,7 @@ void waitForJob (JobHandle job)
   {
     if (pthread_join (jc -> threads[i], nullptr))
     {
-      std::cerr << SYS_ERROR << "error in pthread_join." << std::endl;
+      std::cout << SYS_ERROR << "error in pthread_join." << std::endl;
     }
   }
   jc -> waiting = true;
@@ -389,11 +382,6 @@ void getJobState (JobHandle job, JobState *state)
   else if (state -> stage == SHUFFLE_STAGE)
   {
     denom = tc . atomic_inter_counter -> load ();
-//    long denom = 0;
-//    for (int i = 0; i < (*(jc -> contexts))[0] . multiThreadLevel; i++)
-//    {
-//      denom += (*(tc . interVecs + i)) -> size ();
-//    }
   }
   else //if (state -> stage == REDUCE_STAGE)
   {
@@ -422,7 +410,7 @@ void closeJobHandle (JobHandle job)
   delete (*(jc -> contexts))[0] . atomic_outer_counter;
   if (pthread_mutex_destroy ((*(jc -> contexts))[0] . mutex) != 0)
   {
-    std::cerr << SYS_ERROR << "error on mutex_destroy." << std::endl;
+    std::cout << SYS_ERROR << "error on mutex_destroy." << std::endl;
     exit (1);
   }
   delete (*(jc -> contexts))[0] . mutex;
@@ -434,5 +422,11 @@ void closeJobHandle (JobHandle job)
   delete[] jc -> contexts;
   delete[] jc -> threads;
   delete jc -> barrier;
+  if (pthread_mutex_destroy (jc -> mutex_wait_for_job) != 0)
+  {
+    std::cout << SYS_ERROR << "error on mutex_destroy." << std::endl;
+    exit (1);
+  }
+  delete jc -> mutex_wait_for_job;
   delete jc;
 }
