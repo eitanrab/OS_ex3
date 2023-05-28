@@ -128,7 +128,7 @@ void map (ThreadContext *tc)
   {
     uint64_t old_value = (*(tc -> atomic_counter))++;
 
-    int val = old_value << 33 >> 33;
+    long val = old_value << 33 >> 33;
     if (val < tc -> inputVec . size ())
     {
       lockMutex (tc);
@@ -273,7 +273,8 @@ startMapReduceJob (const MapReduceClient &client, const InputVec &inputVec, Outp
   auto mutex_wait_for_job = new (std::nothrow)pthread_mutex_t (PTHREAD_MUTEX_INITIALIZER);
   if (!threads || !contexts || !barrier || !atomic_counter
       || !atomic_inter_counter
-      || !atomic_out_counter || !intermediateVecs || !interVecs1 || !mutex)
+      || !atomic_out_counter || !intermediateVecs || !interVecs1 || !mutex ||
+      !mutex_wait_for_job)
   {
     std::cout << SYS_ERROR << MEMORY_ALLOCATION_ERR_MSSG << std::endl;
     exit (1);
@@ -308,7 +309,7 @@ startMapReduceJob (const MapReduceClient &client, const InputVec &inputVec, Outp
     if (pthread_create (threads + i, nullptr, mapSortReduce, *(contexts + i))
         != 0)
     {
-      std::cerr << "system error: Failed to create threads." << std::endl;
+      std::cout << "system error: Failed to create threads." << std::endl;
       exit (1);
     }
   }
@@ -347,11 +348,27 @@ void emit3 (K3 *key, V3 *value, void *context)
 }
 
 void waitForJob (JobHandle job)
-{ //TODO: add mutex
+{
   auto *jc = (JobContext *) job;
+  if (pthread_mutex_lock (jc -> mutex_wait_for_job) != 0)
+  {
+    std::cout << SYS_ERROR << "error in pthread_mutex_lock" << std::endl;
+    exit (1);
+  }
   if (jc -> waiting)
   {
+    if (pthread_mutex_unlock (jc -> mutex_wait_for_job) != 0)
+    {
+      std::cout << SYS_ERROR << "error in pthread_mutex_unlock" << std::endl;
+      exit (1);
+    }
     return;
+  }
+  jc -> waiting = true;
+  if (pthread_mutex_unlock (jc -> mutex_wait_for_job) != 0)
+  {
+    std::cout << SYS_ERROR << "error in pthread_mutex_unlock" << std::endl;
+    exit (1);
   }
   for (int i = 0; i < jc -> multiThreadLevel; i++)
   {
@@ -360,7 +377,6 @@ void waitForJob (JobHandle job)
       std::cout << SYS_ERROR << "error in pthread_join." << std::endl;
     }
   }
-  jc -> waiting = true;
 }
 
 void getJobState (JobHandle job, JobState *state)
